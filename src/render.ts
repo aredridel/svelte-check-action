@@ -1,8 +1,8 @@
+import { fmt_path, get_blob_base } from './files';
 import type { DiagnosticStore } from './index';
 import type { Diagnostic } from './diagnostic';
 import { execSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { get_blob_base } from './files';
 import { format } from 'date-fns';
 import type { CTX } from './ctx';
 
@@ -51,7 +51,7 @@ export async function render(ctx: CTX, diagnostics_store: DiagnosticStore) {
 		);
 
 		for (const [path, diagnostics] of diagnostics_store.entries()) {
-			const readable_path = path.replace(ctx.repo_root, '').replace(/^\/+/, '');
+			const readable_path = fmt_path(path, ctx);
 			const lines = await readFile(path, 'utf-8').then((c) => c.split('\n'));
 
 			const diagnostics_markdown = diagnostics.map(

@@ -38,3 +38,7 @@ export async function get_pr_files(ctx: CTX) {
 
 	return pr_files.map((file) => join(ctx.repo_root, file.filename));
 }
+
+export function fmt_path(path: string, ctx: CTX) {
+	return path.replace(ctx.repo_root, '').replace(/^\/+/, '');
+}

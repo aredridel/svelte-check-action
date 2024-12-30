@@ -1,5 +1,5 @@
 import { get_diagnostics, type Diagnostic } from './diagnostic';
-import { get_pr_files, is_subdir } from './files';
+import { fmt_path, get_pr_files, is_subdir } from './files';
 import { get_ctx, type CTX } from './ctx';
 import * as core from '@actions/core';
 import { render } from './render';
@@ -17,8 +17,20 @@ export class DiagnosticStore {
 		return this.warning_count + this.error_count;
 	}
 
-	add(diagnostic: Diagnostic, filter: string[] | null) {
-		if (filter && !filter.includes(diagnostic.path)) {
+	public filtered_error_count = 0;
+	public filtered_warning_count = 0;
+
+	get filtered_count() {
+		return this.filtered_warning_count + this.filtered_error_count;
+	}
+
+	constructor(
+		private readonly ctx: CTX,
+		private readonly changed_files: string[] | null,
+	) {}
+
+	add(diagnostic: Diagnostic) {
+		if (this.changed_files && !this.changed_files.includes(diagnostic.path)) {
 			return;
 		}
 
@@ -26,10 +38,10 @@ export class DiagnosticStore {
 		current.push(diagnostic);
 		this.store.set(diagnostic.path, current);
 
-		if (diagnostic.type == 'error') {
-			this.error_count++;
-		} else {
-			this.warning_count++;
+		this[`${diagnostic.type}_count`]++;
+
+		if (this.ctx.config.fail_filter(fmt_path(diagnostic.path, this.ctx))) {
+			this[`filtered_${diagnostic.type}_count`]++;
 		}
 	}
 
@@ -76,7 +88,7 @@ async function main() {
 	const ctx = get_ctx();
 
 	const changed_files = await get_pr_files(ctx);
-	const diagnostics = new DiagnosticStore();
+	const diagnostics = new DiagnosticStore(ctx, changed_files);
 
 	for (const root_path of ctx.config.diagnostic_paths) {
 		const has_changed_files = changed_files
@@ -87,7 +99,7 @@ async function main() {
 
 		if (has_changed_files) {
 			for (const diagnostic of await get_diagnostics(root_path)) {
-				diagnostics.add(diagnostic, changed_files);
+				diagnostics.add(diagnostic);
 			}
 		}
 	}
@@ -107,18 +119,20 @@ async function main() {
 	await send(ctx, markdown);
 
 	const failed =
-		(ctx.config.fail_on_error && diagnostics.error_count) ||
-		(ctx.config.fail_on_warning && diagnostics.warning_count);
+		(ctx.config.fail_on_error && diagnostics.filtered_error_count) ||
+		(ctx.config.fail_on_warning && diagnostics.filtered_warning_count);
 
 	if (failed) {
-		function stringify(key: string, enabled: boolean) {
-			return `\`${key}\` is ${enabled ? 'enabled' : 'disabled'}`;
+		function stringify(key: string, enabled: boolean, count: number) {
+			return `\`${key}\` is ${enabled ? 'enabled' : 'disabled'} (${count} issue${count === 1 ? '' : 's'})`;
 		}
 
 		core.setFailed(
-			`Failed with ${diagnostics.count} total issues. ` +
-				`${stringify('failOnError', ctx.config.fail_on_error)} & ` +
-				stringify('failOnWarning', ctx.config.fail_on_warning),
+			`Failed with ${diagnostics.filtered_count} filtered issue${diagnostics.filtered_count === 1 ? '' : 's'} ` +
+				`(${diagnostics.count} total). ` +
+				`${stringify('failOnError', ctx.config.fail_on_error, diagnostics.filtered_error_count)} & ` +
+				`${stringify('failOnWarning', ctx.config.fail_on_warning, diagnostics.filtered_warning_count)}. `,
+			// `${ctx.config.fail_filter ? 'Failures filtered by path.' : ''}`,
 		);
 	}
 }

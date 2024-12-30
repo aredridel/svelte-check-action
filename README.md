@@ -48,12 +48,13 @@ This will add a comment to your PRs with any errors, for example:
 
 ## Options
 
-| Option          | Description                                                                                                                                                                                                              | Default |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
-| `paths`         | The folder(s) to run svelte-check in, one per line. It'll only run svelte-check if files in that folder have changed. `svelte-kit sync` will be ran before diagnostics if SvelteKit is found at the folder package.json. | `.`     |
-| `filterChanges` | When true only the files that change (in the pull request) will be checked                                                                                                                                               | `true`  |
-| `failOnError`   | Should we cause CI to fail if there is a Svelte Check error?                                                                                                                                                             | `false` |
-| `failOnWarning` | Should we cause CI to fail if there is a Svelte Check warning?                                                                                                                                                           | `false` |
+| Option          | Description                                                                                                                                                                                                              | Default  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `paths`         | The folder(s) to run svelte-check in, one per line. It'll only run svelte-check if files in that folder have changed. `svelte-kit sync` will be ran before diagnostics if SvelteKit is found at the folder package.json. | `.`      |
+| `filterChanges` | When true only the files that change (in the pull request) will be checked                                                                                                                                               | `true`   |
+| `failOnError`   | Should we cause CI to fail if there is a Svelte Check error?                                                                                                                                                             | `false`  |
+| `failOnWarning` | Should we cause CI to fail if there is a Svelte Check warning?                                                                                                                                                           | `false`  |
+| `failFilter`    | When failFilter is set and either failOnError or failOnWarning is enabled, the action will only fail for issues that occur in paths matching these globes.                                                               | Disabled |
 
 You can configure the action by passing the options under the `with` key, for example:
 

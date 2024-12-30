@@ -23,6 +23,10 @@ inputs:
         description: 'Should we cause CI to fail if there is a Svelte Check warning?'
         required: false
         default: 'false'
+    failFilter:
+        description: 'When failFilter is set and either failOnError or failOnWarning is enabled, the action will only fail for issues that occur in paths matching these globes.'
+        required: false
+        default: '**'
 
 runs:
     using: 'node20'

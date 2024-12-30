@@ -1,5 +1,6 @@
 import * as github from '@actions/github';
 import * as core from '@actions/core';
+import picomatch from 'picomatch';
 import { join } from 'node:path';
 
 export interface Config {
@@ -26,6 +27,11 @@ export interface Config {
 	 * @default false
 	 */
 	fail_on_warning: boolean;
+
+	/**
+	 * The filter to check when finding errors
+	 */
+	fail_filter: picomatch.Matcher;
 }
 
 export interface CTX {
@@ -84,6 +90,8 @@ export function get_ctx(): CTX {
 	if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
 
 	const filter_changes = core.getBooleanInput('filterChanges');
+
+	const fail_filter = picomatch(core.getMultilineInput('failFilter'));
 	const fail_on_warning = core.getBooleanInput('failOnWarning');
 	const fail_on_error = core.getBooleanInput('failOnError');
 
@@ -99,6 +107,7 @@ export function get_ctx(): CTX {
 			filter_changes,
 			fail_on_warning,
 			fail_on_error,
+			fail_filter,
 		},
 	};
 }
