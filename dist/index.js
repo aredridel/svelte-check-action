@@ -29688,6 +29688,9 @@ function get_latest_commit() {
 function pretty_type(type) {
   return type == "error" ? "Error" : "Warn";
 }
+function pl(num, word) {
+  return `**${num}** ${word}${num == 1 ? "" : "s"}`;
+}
 async function render(ctx, diagnostics_store) {
   const blob_base = await get_blob_base(ctx);
   const output = ["# Svelte Check Results\n"];
@@ -29696,7 +29699,7 @@ async function render(ctx, diagnostics_store) {
     output.push("No issues found! \u{1F389}");
   } else {
     output.push(
-      `Found **${diagnostics_store.error_count}** errors and **${diagnostics_store.warning_count}** warnings (${diagnostics_store.error_count + diagnostics_store.warning_count} total) ` + (ctx.config.filter_changes ? " with the files in this PR" : "") + ".\n"
+      `Found ${pl(diagnostics_store.error_count, "error")} and ${pl(diagnostics_store.warning_count, "warning")} (${diagnostics_store.error_count + diagnostics_store.warning_count} total) ` + (ctx.config.filter_changes ? " with the files in this PR" : "") + ".\n"
     );
     for (const [path, diagnostics] of diagnostics_store.entries()) {
       const readable_path = path.replace(ctx.repo_root, "").replace(/^\/+/, "");

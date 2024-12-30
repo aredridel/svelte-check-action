@@ -24,6 +24,10 @@ function pretty_type(type: Diagnostic['type']) {
 	return type == 'error' ? 'Error' : 'Warn';
 }
 
+function pl(num: number, word: string) {
+	return `**${num}** ${word}${num == 1 ? '' : 's'}`;
+}
+
 /**
  * Render a set of diagnostics to markdown, will optionally filter by changed files
  */
@@ -36,8 +40,8 @@ export async function render(ctx: CTX, diagnostics_store: DiagnosticStore) {
 		output.push('No issues found! 🎉');
 	} else {
 		output.push(
-			`Found **${diagnostics_store.error_count}** errors ` +
-				`and **${diagnostics_store.warning_count}** warnings ` +
+			`Found ${pl(diagnostics_store.error_count, 'error')} ` +
+				`and ${pl(diagnostics_store.warning_count, 'warning')} ` +
 				`(${diagnostics_store.error_count + diagnostics_store.warning_count} total) ` +
 				(ctx.config.filter_changes ? ' with the files in this PR' : '') +
 				'.\n',
