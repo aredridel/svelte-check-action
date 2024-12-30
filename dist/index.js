@@ -28084,8 +28084,9 @@ function get_ctx() {
   if (!pr_number) throw new Error("Can't find a pull request, are you running this on a pr?");
   const diagnostic_paths = core.getMultilineInput("paths").map((path) => (0, import_node_path3.join)(repo_root, path));
   if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
-  const filter_changes = core.getBooleanInput("filterChanges") ?? true;
-  const fail = core.getBooleanInput("fail") ?? false;
+  const filter_changes = core.getBooleanInput("filterChanges");
+  const fail_on_warning = core.getBooleanInput("failOnWarning");
+  const fail_on_error = core.getBooleanInput("failOnError");
   return {
     token,
     octokit,
@@ -28096,7 +28097,8 @@ function get_ctx() {
     config: {
       diagnostic_paths,
       filter_changes,
-      fail
+      fail_on_warning,
+      fail_on_error
     }
   };
 }
@@ -29805,9 +29807,14 @@ async function main() {
   });
   const markdown = await render(ctx, diagnostics);
   await send(ctx, markdown);
-  if (ctx.config.fail && diagnostics.error_count > 0) {
+  const failed = ctx.config.fail_on_error && diagnostics.error_count || ctx.config.fail_on_warning && diagnostics.warning_count;
+  if (failed) {
+    let stringify2 = function(key, enabled) {
+      return `\`${key}\` is ${enabled ? "enabled" : "disabled"}`;
+    };
+    var stringify = stringify2;
     core2.setFailed(
-      `Exited as \`fail\` is set to \`true\` and ${diagnostics.error_count} errors were found`
+      `Failed with ${diagnostics.count} total issues. ${stringify2("failOnError", ctx.config.fail_on_error)} & ` + stringify2("failOnWarning", ctx.config.fail_on_warning)
     );
   }
 }

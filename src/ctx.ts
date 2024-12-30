@@ -19,7 +19,13 @@ export interface Config {
 	 * Should we cause CI to fail if there is a Svelte Check error?
 	 * @default false
 	 */
-	fail: boolean;
+	fail_on_error: boolean;
+
+	/**
+	 * Should we cause CI to fail if there is a Svelte Check error?
+	 * @default false
+	 */
+	fail_on_warning: boolean;
 }
 
 export interface CTX {
@@ -77,8 +83,9 @@ export function get_ctx(): CTX {
 	const diagnostic_paths = core.getMultilineInput('paths').map((path) => join(repo_root, path));
 	if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
 
-	const filter_changes = core.getBooleanInput('filterChanges') ?? true;
-	const fail = core.getBooleanInput('fail') ?? false;
+	const filter_changes = core.getBooleanInput('filterChanges');
+	const fail_on_warning = core.getBooleanInput('failOnWarning');
+	const fail_on_error = core.getBooleanInput('failOnError');
 
 	return {
 		token,
@@ -90,7 +97,8 @@ export function get_ctx(): CTX {
 		config: {
 			diagnostic_paths,
 			filter_changes,
-			fail,
+			fail_on_warning,
+			fail_on_error,
 		},
 	};
 }

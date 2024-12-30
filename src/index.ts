@@ -106,9 +106,19 @@ async function main() {
 
 	await send(ctx, markdown);
 
-	if (ctx.config.fail && diagnostics.error_count > 0) {
+	const failed =
+		(ctx.config.fail_on_error && diagnostics.error_count) ||
+		(ctx.config.fail_on_warning && diagnostics.warning_count);
+
+	if (failed) {
+		function stringify(key: string, enabled: boolean) {
+			return `\`${key}\` is ${enabled ? 'enabled' : 'disabled'}`;
+		}
+
 		core.setFailed(
-			`Exited as \`fail\` is set to \`true\` and ${diagnostics.error_count} errors were found`,
+			`Failed with ${diagnostics.count} total issues. ` +
+				`${stringify('failOnError', ctx.config.fail_on_error)} & ` +
+				stringify('failOnWarning', ctx.config.fail_on_warning),
 		);
 	}
 }
