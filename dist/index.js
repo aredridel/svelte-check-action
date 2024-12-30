@@ -23923,6 +23923,13 @@ var require_github = __commonJS({
   }
 });
 
+// src/index.ts
+var index_exports = {};
+__export(index_exports, {
+  DiagnosticStore: () => DiagnosticStore
+});
+module.exports = __toCommonJS(index_exports);
+
 // src/diagnostic.ts
 var import_promises = require("fs/promises");
 var import_core = __toESM(require_core());
@@ -28037,10 +28044,65 @@ async function try_run_svelte_kit_sync(cwd) {
   }
 }
 
-// src/index.ts
+// src/files.ts
 var import_node_path2 = require("path");
+function is_subdir(parent, child) {
+  return !(0, import_node_path2.relative)((0, import_node_path2.normalize)(parent), (0, import_node_path2.normalize)(child)).startsWith("..");
+}
+async function get_blob_base(ctx) {
+  const { data: pr } = await ctx.octokit.rest.pulls.get({
+    pull_number: ctx.pr_number,
+    owner: ctx.owner,
+    repo: ctx.repo
+  });
+  return new URL(`https://github.com/${ctx.owner}/${ctx.repo}/blob/${pr.head.sha}`);
+}
+async function get_pr_files(ctx) {
+  if (!ctx.config.filter_changes) {
+    return null;
+  }
+  const pr_files = await ctx.octokit.paginate(ctx.octokit.rest.pulls.listFiles, {
+    per_page: 100,
+    pull_number: ctx.pr_number,
+    owner: ctx.owner,
+    repo: ctx.repo
+  });
+  return pr_files.map((file) => (0, import_node_path2.join)(ctx.repo_root, file.filename));
+}
+
+// src/ctx.ts
 var github = __toESM(require_github());
 var core = __toESM(require_core());
+var import_node_path3 = require("path");
+function get_ctx() {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error("Please add the GITHUB_TOKEN environment variable");
+  const octokit = github.getOctokit(token);
+  const repo_root = process.env.GITHUB_WORKSPACE;
+  if (!repo_root) throw new Error("Missing GITHUB_WORKSPACE environment variable");
+  const pr_number = github.context.payload.pull_request?.number;
+  if (!pr_number) throw new Error("Can't find a pull request, are you running this on a pr?");
+  const diagnostic_paths = core.getMultilineInput("paths").map((path) => (0, import_node_path3.join)(repo_root, path));
+  if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
+  const filter_changes = core.getBooleanInput("filterChanges") ?? true;
+  const fail = core.getBooleanInput("fail") ?? false;
+  return {
+    token,
+    octokit,
+    pr_number,
+    repo_root,
+    repo: github.context.repo.repo,
+    owner: github.context.repo.owner,
+    config: {
+      diagnostic_paths,
+      filter_changes,
+      fail
+    }
+  };
+}
+
+// src/index.ts
+var core2 = __toESM(require_core());
 
 // src/render.ts
 var import_node_child_process2 = require("child_process");
@@ -29626,23 +29688,22 @@ function get_latest_commit() {
 function pretty_type(type) {
   return type == "error" ? "Error" : "Warn";
 }
-async function render(all_diagnostics, repo_root, file_url_base, changed_files) {
-  const diagnostics_map = /* @__PURE__ */ new Map();
-  let diagnostic_count = 0;
-  for (const diagnostic of all_diagnostics) {
-    if (changed_files && !changed_files.includes(diagnostic.path)) continue;
-    const current = diagnostics_map.get(diagnostic.path) ?? [];
-    current.push(diagnostic);
-    diagnostics_map.set(diagnostic.path, current);
-    diagnostic_count++;
-  }
-  let markdown = ``;
-  for (const [path, diagnostics] of diagnostics_map) {
-    const readable_path = path.replace(repo_root, "").replace(/^\/+/, "");
-    const lines = await (0, import_promises2.readFile)(path, "utf-8").then((c) => c.split("\n"));
-    const diagnostics_markdown = diagnostics.map(
-      // prettier-ignore
-      (d) => `#### [${readable_path}:${d.start.line}:${d.start.character}](${file_url_base}/${readable_path}#L${d.start.line}${d.start.line != d.end.line ? `-L${d.end.line}` : ""})
+async function render(ctx, diagnostics_store) {
+  const blob_base = await get_blob_base(ctx);
+  const output = ["# Svelte Check Results\n"];
+  const now = /* @__PURE__ */ new Date();
+  if (diagnostics_store.count == 0) {
+    output.push("No issues found! \u{1F389}");
+  } else {
+    output.push(
+      `Found **${diagnostics_store.error_count}** errors and **${diagnostics_store.warning_count}** warnings (${diagnostics_store.error_count + diagnostics_store.warning_count} total) ` + (ctx.config.filter_changes ? " with the files in this PR" : "") + ".\n"
+    );
+    for (const [path, diagnostics] of diagnostics_store.entries()) {
+      const readable_path = path.replace(ctx.repo_root, "").replace(/^\/+/, "");
+      const lines = await (0, import_promises2.readFile)(path, "utf-8").then((c) => c.split("\n"));
+      const diagnostics_markdown = diagnostics.map(
+        // prettier-ignore
+        (d) => `#### [${readable_path}:${d.start.line}:${d.start.character}](${blob_base}${readable_path}#L${d.start.line}${d.start.line != d.end.line ? `-L${d.end.line}` : ""})
 
 \`\`\`ts
 ${pretty_type(d.type)}: ${d.message}
@@ -29650,110 +29711,108 @@ ${pretty_type(d.type)}: ${d.message}
 ${lines.slice(d.start.line - 1, d.end.line).join("\n").trim()}
 \`\`\`
 `
-    );
-    markdown += `
+      );
+      output.push(
+        // prettier-ignore
+        `
 
 <details>
 <summary>${readable_path}</summary>
 
 ${diagnostics_markdown.join("\n")}
-</details>`;
+</details>`
+      );
+    }
   }
-  const now = /* @__PURE__ */ new Date();
-  const main_content = diagnostic_count ? (
-    // prettier-ignore
-    `Found **${diagnostic_count}** issues ${changed_files ? "with the files in this PR " : ""}(${all_diagnostics.length} total)
-
-${markdown.trim()}`
-  ) : "No issues found! \u{1F389}";
-  return `# Svelte Check Results
-
-${main_content}
-
----
-
-Last Updated: <span title="${now.toISOString()}">${format(now, "do MMMM 'at' HH:mm")}</span> (${get_latest_commit()})
-`;
+  output.push("\n---\n");
+  output.push(`Last Updated: <span title="${now.toISOString()}">${format(now, "do MMMM 'at' HH:mm")}</span> (${get_latest_commit()})`);
+  return output.join("\n");
 }
 
 // src/index.ts
-function is_subdir(parent, child) {
-  return !(0, import_node_path2.relative)((0, import_node_path2.normalize)(parent), (0, import_node_path2.normalize)(child)).startsWith("..");
-}
-async function main() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("Please add the GITHUB_TOKEN environment variable");
-  const repo_root = process.env.GITHUB_WORKSPACE;
-  if (!repo_root) throw new Error("Missing GITHUB_WORKSPACE environment variable");
-  const octokit = github.getOctokit(token);
-  const pull_number = github.context.payload.pull_request?.number;
-  if (!pull_number) throw new Error("Can't find a pull request, are you running this on a pr?");
-  const filter_changes = core.getBooleanInput("filterChanges") ?? true;
-  const { owner, repo } = github.context.repo;
-  const pr_files_response = filter_changes ? await octokit.paginate(octokit.rest.pulls.listFiles, {
-    per_page: 100,
-    pull_number,
-    owner,
-    repo
-  }) : null;
-  const { data: pr } = await octokit.rest.pulls.get({
-    pull_number,
-    owner,
-    repo
-  });
-  const diagnostic_paths = core.getMultilineInput("paths").map((path) => (0, import_node_path2.join)(repo_root, path));
-  if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
-  const pr_files = pr_files_response?.map((file) => (0, import_node_path2.join)(repo_root, file.filename));
-  const latest_commit = pr.head.sha;
-  console.log("debug:", {
-    diagnostic_paths,
-    filter_changes,
-    latest_commit,
-    pull_number,
-    repo_root,
-    pr_files,
-    owner,
-    repo
-  });
-  const diagnostics = [];
-  for (const d_path of diagnostic_paths) {
-    const has_changed = pr_files ? pr_files.some((pr_file) => is_subdir(d_path, pr_file)) : true;
-    console.log(has_changed ? "checking" : "skipped", d_path);
-    if (has_changed) {
-      const new_diagnostics = await get_diagnostics(d_path);
-      diagnostics.push(...new_diagnostics);
+var DiagnosticStore = class {
+  store = /* @__PURE__ */ new Map();
+  warning_count = 0;
+  error_count = 0;
+  get count() {
+    return this.warning_count + this.error_count;
+  }
+  add(diagnostic, filter) {
+    if (filter && !filter.includes(diagnostic.path)) {
+      return;
+    }
+    const current = this.store.get(diagnostic.path) ?? [];
+    current.push(diagnostic);
+    this.store.set(diagnostic.path, current);
+    if (diagnostic.type == "error") {
+      this.error_count++;
+    } else {
+      this.warning_count++;
     }
   }
-  const markdown = await render(
-    diagnostics,
-    repo_root,
-    `https://github.com/${owner}/${repo}/blob/${latest_commit}`,
-    filter_changes ? pr_files : diagnostics.map((d) => d.path)
-  );
-  const { data: comments } = await octokit.rest.issues.listComments({
-    issue_number: pull_number,
-    owner,
-    repo
+  entries() {
+    return this.store.entries();
+  }
+};
+async function send(ctx, body) {
+  const { data: comments } = await ctx.octokit.rest.issues.listComments({
+    issue_number: ctx.pr_number,
+    owner: ctx.owner,
+    repo: ctx.repo
   });
   const last_comment = comments.filter((comment) => comment.body?.startsWith("# Svelte Check Results")).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).at(0);
   if (last_comment) {
-    await octokit.rest.issues.updateComment({
+    await ctx.octokit.rest.issues.updateComment({
       comment_id: last_comment.id,
-      issue_number: pull_number,
-      body: markdown,
-      owner,
-      repo
+      issue_number: ctx.pr_number,
+      owner: ctx.owner,
+      repo: ctx.repo,
+      body
     });
   } else {
-    await octokit.rest.issues.createComment({
-      issue_number: pull_number,
-      body: markdown,
-      owner,
-      repo
+    await ctx.octokit.rest.issues.createComment({
+      issue_number: ctx.pr_number,
+      owner: ctx.owner,
+      repo: ctx.repo,
+      body
     });
   }
 }
-main().then(() => console.log("Finished")).catch((error) => core.setFailed(error instanceof Error ? error.message : `${error}`));
+async function main() {
+  const ctx = get_ctx();
+  const changed_files = await get_pr_files(ctx);
+  const diagnostics = new DiagnosticStore();
+  for (const root_path of ctx.config.diagnostic_paths) {
+    const has_changed_files = changed_files ? changed_files.some((pr_file) => is_subdir(root_path, pr_file)) : true;
+    console.log(`${has_changed_files ? "checking" : "skipped"} "${root_path}"`);
+    if (has_changed_files) {
+      for (const diagnostic of await get_diagnostics(root_path)) {
+        diagnostics.add(diagnostic, changed_files);
+      }
+    }
+  }
+  console.log("debug", {
+    diagnostics,
+    changed_files,
+    ctx: {
+      ...ctx,
+      octokit: "(hidden)",
+      token: "(hidden)"
+    }
+  });
+  const markdown = await render(ctx, diagnostics);
+  await send(ctx, markdown);
+  if (ctx.config.fail && diagnostics.error_count > 0) {
+    core2.setFailed(
+      `Exited as \`fail\` is set to \`true\` and ${diagnostics.error_count} errors were found`
+    );
+  }
+}
+main().then(() => console.log("Finished")).catch((error) => core2.setFailed(error instanceof Error ? error.message : `${error}`));
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  DiagnosticStore
+});
 /*! Bundled license information:
 
 undici/lib/fetch/body.js:

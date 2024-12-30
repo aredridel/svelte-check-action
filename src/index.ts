@@ -1,86 +1,45 @@
 import { get_diagnostics, type Diagnostic } from './diagnostic';
-import { join, relative, normalize } from 'node:path';
-import * as github from '@actions/github';
+import { get_pr_files, is_subdir } from './files';
+import { get_ctx, type CTX } from './ctx';
 import * as core from '@actions/core';
 import { render } from './render';
 
-function is_subdir(parent: string, child: string) {
-	return !relative(normalize(parent), normalize(child)).startsWith('..');
-}
+export class DiagnosticStore {
+	public readonly store = new Map<string, Diagnostic[]>();
 
-async function main() {
-	const token = process.env.GITHUB_TOKEN;
-	if (!token) throw new Error('Please add the GITHUB_TOKEN environment variable');
+	public warning_count = 0;
+	public error_count = 0;
 
-	const repo_root = process.env.GITHUB_WORKSPACE;
-	if (!repo_root) throw new Error('Missing GITHUB_WORKSPACE environment variable');
+	get count() {
+		return this.warning_count + this.error_count;
+	}
 
-	const octokit = github.getOctokit(token);
+	add(diagnostic: Diagnostic, filter: string[] | null) {
+		if (filter && !filter.includes(diagnostic.path)) {
+			return;
+		}
 
-	const pull_number = github.context.payload.pull_request?.number;
-	if (!pull_number) throw new Error("Can't find a pull request, are you running this on a pr?");
+		const current = this.store.get(diagnostic.path) ?? [];
+		current.push(diagnostic);
+		this.store.set(diagnostic.path, current);
 
-	const filter_changes = core.getBooleanInput('filterChanges') ?? true;
-	const { owner, repo } = github.context.repo;
-
-	const pr_files_response = filter_changes
-		? await octokit.paginate(octokit.rest.pulls.listFiles, {
-				per_page: 100,
-				pull_number,
-				owner,
-				repo,
-			})
-		: null;
-
-	const { data: pr } = await octokit.rest.pulls.get({
-		pull_number,
-		owner,
-		repo,
-	});
-
-	const diagnostic_paths = core.getMultilineInput('paths').map((path) => join(repo_root, path));
-	if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
-
-	const pr_files = pr_files_response?.map((file) => join(repo_root, file.filename));
-	const latest_commit = pr.head.sha;
-
-	console.log('debug:', {
-		diagnostic_paths,
-		filter_changes,
-		latest_commit,
-		pull_number,
-		repo_root,
-		pr_files,
-		owner,
-		repo,
-	});
-
-	const diagnostics: Diagnostic[] = [];
-
-	for (const d_path of diagnostic_paths) {
-		const has_changed = pr_files
-			? pr_files.some((pr_file) => is_subdir(d_path, pr_file))
-			: true;
-
-		console.log(has_changed ? 'checking' : 'skipped', d_path);
-
-		if (has_changed) {
-			const new_diagnostics = await get_diagnostics(d_path);
-			diagnostics.push(...new_diagnostics);
+		if (diagnostic.type == 'error') {
+			this.error_count++;
+		} else {
+			this.warning_count++;
 		}
 	}
 
-	const markdown = await render(
-		diagnostics,
-		repo_root,
-		`https://github.com/${owner}/${repo}/blob/${latest_commit}`,
-		filter_changes ? pr_files : diagnostics.map((d) => d.path),
-	);
+	entries() {
+		return this.store.entries();
+	}
+}
 
-	const { data: comments } = await octokit.rest.issues.listComments({
-		issue_number: pull_number,
-		owner,
-		repo,
+async function send(ctx: CTX, body: string) {
+	const { data: comments } = await ctx.octokit.rest.issues.listComments({
+		issue_number: ctx.pr_number,
+		owner: ctx.owner,
+		repo: ctx.repo,
 	});
 
 	const last_comment = comments
@@ -89,20 +48,61 @@ async function main() {
 		.at(0);
 
 	if (last_comment) {
-		await octokit.rest.issues.updateComment({
+		await ctx.octokit.rest.issues.updateComment({
 			comment_id: last_comment.id,
-			issue_number: pull_number,
-			body: markdown,
-			owner,
-			repo,
+			issue_number: ctx.pr_number,
+			owner: ctx.owner,
+			repo: ctx.repo,
+			body,
 		});
 	} else {
-		await octokit.rest.issues.createComment({
-			issue_number: pull_number,
-			body: markdown,
-			owner,
-			repo,
+		await ctx.octokit.rest.issues.createComment({
+			issue_number: ctx.pr_number,
+			owner: ctx.owner,
+			repo: ctx.repo,
+			body,
 		});
+	}
+}
+
+async function main() {
+	const ctx = get_ctx();
+
+	const changed_files = await get_pr_files(ctx);
+	const diagnostics = new DiagnosticStore();
+
+	for (const root_path of ctx.config.diagnostic_paths) {
+		const has_changed_files = changed_files
+			? changed_files.some((pr_file) => is_subdir(root_path, pr_file))
+			: true;
+
+		console.log(`${has_changed_files ? 'checking' : 'skipped'} "${root_path}"`);
+
+		if (has_changed_files) {
+			for (const diagnostic of await get_diagnostics(root_path)) {
+				diagnostics.add(diagnostic, changed_files);
+			}
+		}
+	}
+
+	console.log('debug', {
+		diagnostics,
+		changed_files,
+		ctx: {
+			...ctx,
+			octokit: '(hidden)',
+			token: '(hidden)',
+		},
+	});
+
+	const markdown = await render(ctx, diagnostics);
+
+	await send(ctx, markdown);
+
+	if (ctx.config.fail && diagnostics.error_count > 0) {
+		core.setFailed(
+			`Exited as \`fail\` is set to \`true\` and ${diagnostics.error_count} errors were found`,
+		);
 	}
 }
 

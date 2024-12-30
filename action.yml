@@ -15,6 +15,10 @@ inputs:
         description: 'When true only the files that change (in the pull request) will be checked'
         required: false
         default: 'true'
+    fail:
+        description: 'Should we cause CI to fail if there is a Svelte Check error?'
+        required: false
+        default: 'false'
 
 runs:
     using: 'node20'
