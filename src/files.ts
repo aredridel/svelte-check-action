@@ -1,10 +1,16 @@
 import { relative, normalize, join } from 'node:path';
 import type { CTX } from './ctx';
 
+/**
+ * Check if `child` is a sub directory of `parent`
+ */
 export function is_subdir(parent: string, child: string) {
 	return !relative(normalize(parent), normalize(child)).startsWith('..');
 }
 
+/**
+ * Get the GitHub blob url for file contents
+ */
 export async function get_blob_base(ctx: CTX) {
 	const { data: pr } = await ctx.octokit.rest.pulls.get({
 		pull_number: ctx.pr_number,
@@ -15,6 +21,9 @@ export async function get_blob_base(ctx: CTX) {
 	return new URL(`https://github.com/${ctx.owner}/${ctx.repo}/blob/${pr.head.sha}`);
 }
 
+/**
+ * Get the files that changed in the current PR
+ */
 export async function get_pr_files(ctx: CTX) {
 	if (!ctx.config.filter_changes) {
 		return null;

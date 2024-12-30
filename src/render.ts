@@ -2,16 +2,13 @@ import type { DiagnosticStore } from './index';
 import type { Diagnostic } from './diagnostic';
 import { execSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { get_blob_base } from './files';
 import { format } from 'date-fns';
 import type { CTX } from './ctx';
-import { get_blob_base } from './files';
 
-export interface PRFile {
-	blob_url: string;
-	relative_path: string;
-	local_path: string;
-}
-
+/**
+ * Get the latest git commit of the current repo
+ */
 function get_latest_commit() {
 	try {
 		return execSync('git rev-parse --short HEAD').toString().trim();
@@ -20,16 +17,22 @@ function get_latest_commit() {
 	}
 }
 
+/**
+ * Prettify the diagnostic type
+ */
 function pretty_type(type: Diagnostic['type']) {
 	return type == 'error' ? 'Error' : 'Warn';
 }
 
+/**
+ * Render number + word taking into account simple plural
+ */
 function pl(num: number, word: string) {
 	return `**${num}** ${word}${num == 1 ? '' : 's'}`;
 }
 
 /**
- * Render a set of diagnostics to markdown, will optionally filter by changed files
+ * Render a set of diagnostics to markdown
  */
 export async function render(ctx: CTX, diagnostics_store: DiagnosticStore) {
 	const blob_base = await get_blob_base(ctx);

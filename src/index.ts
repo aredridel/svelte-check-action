@@ -4,6 +4,9 @@ import { get_ctx, type CTX } from './ctx';
 import * as core from '@actions/core';
 import { render } from './render';
 
+/**
+ * Stores the diagnostics in an easy to use way, whilst keeping track of counts.
+ */
 export class DiagnosticStore {
 	public readonly store = new Map<string, Diagnostic[]>();
 
@@ -35,6 +38,10 @@ export class DiagnosticStore {
 	}
 }
 
+/**
+ * Send a message to the current PR, taking into account
+ * whether the last message can be edited instead.
+ */
 async function send(ctx: CTX, body: string) {
 	const { data: comments } = await ctx.octokit.rest.issues.listComments({
 		issue_number: ctx.pr_number,

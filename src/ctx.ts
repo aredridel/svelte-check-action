@@ -59,6 +59,9 @@ export interface CTX {
 	repo: string;
 }
 
+/**
+ * Get the actions current context
+ */
 export function get_ctx(): CTX {
 	const token = process.env.GITHUB_TOKEN;
 	if (!token) throw new Error('Please add the GITHUB_TOKEN environment variable');
