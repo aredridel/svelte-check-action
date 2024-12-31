@@ -9208,7 +9208,7 @@ var require_readable = __commonJS({
     var kBody = Symbol("kBody");
     var kAbort = Symbol("abort");
     var kContentType = Symbol("kContentType");
-    var noop2 = () => {
+    var noop3 = () => {
     };
     module2.exports = class BodyReadable extends Readable {
       constructor({
@@ -9330,7 +9330,7 @@ var require_readable = __commonJS({
         return new Promise((resolve, reject) => {
           const signalListenerCleanup = signal ? util2.addAbortListener(signal, () => {
             this.destroy();
-          }) : noop2;
+          }) : noop3;
           this.on("close", function() {
             signalListenerCleanup();
             if (signal && signal.aborted) {
@@ -9338,7 +9338,7 @@ var require_readable = __commonJS({
             } else {
               resolve(null);
             }
-          }).on("error", noop2).on("data", function(chunk) {
+          }).on("error", noop3).on("data", function(chunk) {
             limit -= chunk.length;
             if (limit <= 0) {
               this.destroy();
@@ -21155,7 +21155,7 @@ var dist_web_exports = {};
 __export(dist_web_exports, {
   Octokit: () => Octokit
 });
-var import_before_after_hook, VERSION4, noop, consoleWarn, consoleError, userAgentTrail, Octokit;
+var import_before_after_hook, VERSION4, noop2, consoleWarn, consoleError, userAgentTrail, Octokit;
 var init_dist_web4 = __esm({
   "node_modules/.pnpm/@octokit+core@5.2.0/node_modules/@octokit/core/dist-web/index.js"() {
     "use strict";
@@ -21165,7 +21165,7 @@ var init_dist_web4 = __esm({
     init_dist_web3();
     init_dist_src4();
     VERSION4 = "5.2.0";
-    noop = () => {
+    noop2 = () => {
     };
     consoleWarn = console.warn.bind(console);
     consoleError = console.error.bind(console);
@@ -21244,8 +21244,8 @@ var init_dist_web4 = __esm({
         this.graphql = withCustomRequest(this.request).defaults(requestDefaults);
         this.log = Object.assign(
           {
-            debug: noop,
-            info: noop,
+            debug: noop2,
+            info: noop2,
             warn: consoleWarn,
             error: consoleError
           },
@@ -25450,9 +25450,94 @@ module.exports = __toCommonJS(index_exports);
 // src/diagnostic.ts
 var import_promises = require("fs/promises");
 var import_core = __toESM(require_core());
-var import_node_child_process = require("child_process");
 var import_node_fs = require("fs");
 var import_node_path = require("path");
+
+// node_modules/.pnpm/nanoexec@1.1.0_@types+node@20.17.10/node_modules/nanoexec/dist/index.js
+var import_node_child_process = require("child_process");
+
+// node_modules/.pnpm/promise-make-naked@3.0.0/node_modules/promise-make-naked/dist/utils.js
+var noop = () => {
+};
+
+// node_modules/.pnpm/promise-make-naked@3.0.0/node_modules/promise-make-naked/dist/index.js
+var makeNakedPromise = () => {
+  let resolve = noop;
+  let reject = noop;
+  let resolved = false;
+  let rejected = false;
+  const promise = new Promise((res, rej) => {
+    resolve = (value) => {
+      resolved = true;
+      return res(value);
+    };
+    reject = (value) => {
+      rejected = true;
+      return rej(value);
+    };
+  });
+  const isPending = () => !resolved && !rejected;
+  const isResolved = () => resolved;
+  const isRejected = () => rejected;
+  return { promise, resolve, reject, isPending, isResolved, isRejected };
+};
+var dist_default = makeNakedPromise;
+
+// node_modules/.pnpm/nanoexec@1.1.0_@types+node@20.17.10/node_modules/nanoexec/dist/utils.js
+var import_node_buffer = require("buffer");
+var assertBuffer = (value) => {
+  if (import_node_buffer.Buffer.isBuffer(value)) {
+    return true;
+  } else {
+    throw new Error(`Expected a Buffer, got ${value}`);
+  }
+};
+
+// node_modules/.pnpm/nanoexec@1.1.0_@types+node@20.17.10/node_modules/nanoexec/dist/index.js
+function exec(command, argsOrOptions, options) {
+  const { promise, resolve, reject } = dist_default();
+  const processArgs = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+  const processOptions = Array.isArray(argsOrOptions) ? options : argsOrOptions;
+  const processDefaultOptions = { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] };
+  const process2 = (0, import_node_child_process.spawn)(command, processArgs, { ...processDefaultOptions, ...processOptions });
+  const stderrChunks = [];
+  const stdoutChunks = [];
+  process2.stderr?.on("data", (chunk) => {
+    assertBuffer(chunk);
+    stderrChunks.push(chunk);
+  });
+  process2.stdout?.on("data", (chunk) => {
+    assertBuffer(chunk);
+    stdoutChunks.push(chunk);
+  });
+  process2.on("error", (error) => {
+    reject(error);
+  });
+  process2.on("exit", (code) => {
+    const ok = code === 0;
+    const stderr = Buffer.concat(stderrChunks);
+    const stdout = Buffer.concat(stdoutChunks);
+    const result = { process: process2, ok, code, stderr, stdout };
+    resolve(result);
+  });
+  return {
+    then: promise.then.bind(promise),
+    process: process2,
+    get ok() {
+      return promise.then((result) => result.ok);
+    },
+    get code() {
+      return promise.then((result) => result.code);
+    },
+    get stderr() {
+      return promise.then((result) => result.stderr);
+    },
+    get stdout() {
+      return promise.then((result) => result.stdout);
+    }
+  };
+}
+var dist_default2 = exec;
 
 // node_modules/.pnpm/zod@3.24.1/node_modules/zod/lib/index.mjs
 var util;
@@ -29516,33 +29601,33 @@ var diagnosticSchema = z.object({
 });
 async function get_diagnostics(cwd) {
   await try_run_svelte_kit_sync(cwd);
-  return await new Promise((resolve) => {
-    (0, import_node_child_process.exec)("npx -y svelte-check --output machine-verbose", { cwd }, (error, stdout, stderr) => {
-      if (typeof error?.code == "number" && error.code > 1) {
-        console.error("Failed to run svelte-check", error);
-        (0, import_core.setFailed)(`Failed to run svelte-check: "${error.message}"`);
-        process.exit(1);
-      }
-      const lines = [...stdout.split("\n"), ...stderr.split("\n")];
-      const diagnostics = [];
-      for (const line of lines) {
-        const result = line.trim().match(/^\d+\s(?<diagnostic>.*)$/);
-        if (result && result.groups) {
-          try {
-            const raw = JSON.parse(result.groups.diagnostic);
-            const { filename, ...diagnostic } = diagnosticSchema.parse(raw);
-            diagnostics.push({
-              ...diagnostic,
-              fileName: filename,
-              path: (0, import_node_path.join)(cwd, filename)
-            });
-          } catch (e) {
-          }
-        }
-      }
-      resolve(diagnostics);
-    });
+  const result = await dist_default2("npx", ["-y", "svelte-check", "--output=machine-verbose"], {
+    shell: true,
+    cwd
   });
+  if (result.code != null && result.code > 1) {
+    console.error("Failed to run svelte-check", result.stderr.toString());
+    (0, import_core.setFailed)(`Failed to run svelte-check: "${result.stderr}"`);
+    process.exit(1);
+  }
+  const diagnostics = [];
+  for (const line of result.stdout.toString().split("\n")) {
+    const result2 = line.trim().match(/^\d+\s(?<diagnostic>.*)$/);
+    if (result2 && result2.groups) {
+      try {
+        const raw = JSON.parse(result2.groups.diagnostic);
+        const { filename, ...diagnostic } = diagnosticSchema.parse(raw);
+        diagnostics.push({
+          ...diagnostic,
+          fileName: filename,
+          path: (0, import_node_path.join)(cwd, filename)
+        });
+      } catch (e) {
+        console.error("failed to parse diagnostic");
+      }
+    }
+  }
+  return diagnostics;
 }
 async function try_run_svelte_kit_sync(cwd) {
   const pkg_path = (0, import_node_path.join)(cwd, "package.json");
@@ -29550,14 +29635,13 @@ async function try_run_svelte_kit_sync(cwd) {
   const pkg = JSON.parse(await (0, import_promises.readFile)(pkg_path, "utf-8"));
   if (pkg.dependencies?.["@sveltejs/kit"] || pkg.devDependencies?.["@sveltejs/kit"]) {
     console.log(`running svelte-kit sync at "${cwd}"`);
-    await new Promise((resolve) => {
-      (0, import_node_child_process.exec)("npx -y svelte-kit sync", { cwd }, (error) => {
-        if (error) {
-          console.log("svelte-kit sync failed", error);
-        }
-        resolve();
+    const result = await dist_default2("npx", ["-y", "svelte-kit", "sync"], { shell: true, cwd });
+    if (!result.ok) {
+      console.error("svelte-kit sync failed", {
+        ...result,
+        cwd
       });
-    });
+    }
   }
 }
 

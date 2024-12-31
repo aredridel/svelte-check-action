@@ -4,9 +4,9 @@
 
 import { readFile } from 'node:fs/promises';
 import { setFailed } from '@actions/core';
-import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import exec from 'nanoexec';
 import { z } from 'zod';
 
 const diagnosticSchema = z.object({
@@ -47,37 +47,39 @@ export interface Diagnostic extends Omit<RawDiagnostic, 'filename'> {
 export async function get_diagnostics(cwd: string) {
 	await try_run_svelte_kit_sync(cwd);
 
-	return await new Promise<Diagnostic[]>((resolve) => {
-		exec('npx -y svelte-check --output machine-verbose', { cwd }, (error, stdout, stderr) => {
-			if (typeof error?.code == 'number' && error.code > 1) {
-				console.error('Failed to run svelte-check', error);
-				setFailed(`Failed to run svelte-check: "${error.message}"`);
-				process.exit(1);
-			}
-
-			const lines = [...stdout.split('\n'), ...stderr.split('\n')];
-			const diagnostics: Diagnostic[] = [];
-
-			for (const line of lines) {
-				const result = line.trim().match(/^\d+\s(?<diagnostic>.*)$/);
-
-				if (result && result.groups) {
-					try {
-						const raw = JSON.parse(result.groups.diagnostic);
-						const { filename, ...diagnostic } = diagnosticSchema.parse(raw);
-
-						diagnostics.push({
-							...diagnostic,
-							fileName: filename,
-							path: join(cwd, filename),
-						});
-					} catch (e) {}
-				}
-			}
-
-			resolve(diagnostics);
-		});
+	const result = await exec('npx', ['-y', 'svelte-check', '--output=machine-verbose'], {
+		shell: true,
+		cwd,
 	});
+
+	if (result.code != null && result.code > 1) {
+		console.error('Failed to run svelte-check', result.stderr.toString());
+		setFailed(`Failed to run svelte-check: "${result.stderr}"`);
+		process.exit(1);
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const line of result.stdout.toString().split('\n')) {
+		const result = line.trim().match(/^\d+\s(?<diagnostic>.*)$/);
+
+		if (result && result.groups) {
+			try {
+				const raw = JSON.parse(result.groups.diagnostic);
+				const { filename, ...diagnostic } = diagnosticSchema.parse(raw);
+
+				diagnostics.push({
+					...diagnostic,
+					fileName: filename,
+					path: join(cwd, filename),
+				});
+			} catch (e) {
+				console.error('failed to parse diagnostic');
+			}
+		}
+	}
+
+	return diagnostics;
 }
 
 async function try_run_svelte_kit_sync(cwd: string) {
@@ -88,14 +90,14 @@ async function try_run_svelte_kit_sync(cwd: string) {
 
 	if (pkg.dependencies?.['@sveltejs/kit'] || pkg.devDependencies?.['@sveltejs/kit']) {
 		console.log(`running svelte-kit sync at "${cwd}"`);
-		await new Promise<void>((resolve) => {
-			exec('npx -y svelte-kit sync', { cwd }, (error) => {
-				if (error) {
-					console.log('svelte-kit sync failed', error);
-				}
 
-				resolve();
+		const result = await exec('npx', ['-y', 'svelte-kit', 'sync'], { shell: true, cwd });
+
+		if (!result.ok) {
+			console.error('svelte-kit sync failed', {
+				...result,
+				cwd,
 			});
-		});
+		}
 	}
 }
