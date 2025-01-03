@@ -29601,7 +29601,7 @@ var diagnosticSchema = z.object({
 });
 async function get_diagnostics(cwd) {
   await try_run_svelte_kit_sync(cwd);
-  const result = await dist_default2("npx", ["-y", "svelte-check", "--output=machine-verbose"], {
+  const result = await dist_default2("npx", ["-y", "svelte-check@4", "--output=machine-verbose"], {
     shell: true,
     cwd
   });
