@@ -75,8 +75,7 @@ export interface CTX {
  * Get the actions current context
  */
 export function get_ctx(): CTX {
-	const token = process.env.GITHUB_TOKEN;
-	if (!token) throw new Error('Please add the GITHUB_TOKEN environment variable');
+	const token = core.getInput('token');
 
 	const octokit = github.getOctokit(token);
 

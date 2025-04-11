@@ -19686,7 +19686,7 @@ var require_core = __commonJS({
       process.env["PATH"] = `${inputPath}${path.delimiter}${process.env["PATH"]}`;
     }
     exports2.addPath = addPath;
-    function getInput(name, options) {
+    function getInput2(name, options) {
       const val = process.env[`INPUT_${name.replace(/ /g, "_").toUpperCase()}`] || "";
       if (options && options.required && !val) {
         throw new Error(`Input required and not supplied: ${name}`);
@@ -19696,9 +19696,9 @@ var require_core = __commonJS({
       }
       return val.trim();
     }
-    exports2.getInput = getInput;
+    exports2.getInput = getInput2;
     function getMultilineInput2(name, options) {
-      const inputs = getInput(name, options).split("\n").filter((x) => x !== "");
+      const inputs = getInput2(name, options).split("\n").filter((x) => x !== "");
       if (options && options.trimWhitespace === false) {
         return inputs;
       }
@@ -19708,7 +19708,7 @@ var require_core = __commonJS({
     function getBooleanInput2(name, options) {
       const trueValue = ["true", "True", "TRUE"];
       const falseValue = ["false", "False", "FALSE"];
-      const val = getInput(name, options);
+      const val = getInput2(name, options);
       if (trueValue.includes(val))
         return true;
       if (falseValue.includes(val))
@@ -29680,8 +29680,7 @@ var core = __toESM(require_core());
 var import_picomatch = __toESM(require_picomatch2());
 var import_node_path3 = require("path");
 function get_ctx() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("Please add the GITHUB_TOKEN environment variable");
+  const token = core.getInput("token");
   const octokit = github.getOctokit(token);
   const repo_root = process.env.GITHUB_WORKSPACE;
   if (!repo_root) throw new Error("Missing GITHUB_WORKSPACE environment variable");
