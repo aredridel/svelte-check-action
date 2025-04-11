@@ -2,6 +2,7 @@ import { get_diagnostics, type Diagnostic } from './diagnostic';
 import { fmt_path, get_pr_files, is_subdir } from './files';
 import { get_ctx, type CTX } from './ctx';
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 import { render } from './render';
 
 /**
@@ -50,43 +51,18 @@ export class DiagnosticStore {
 	}
 }
 
-/**
- * Send a message to the current PR, taking into account
- * whether the last message can be edited instead.
- */
-async function send(ctx: CTX, body: string) {
-	const { data: comments } = await ctx.octokit.rest.issues.listComments({
-		issue_number: ctx.pr_number,
-		owner: ctx.owner,
-		repo: ctx.repo,
-	});
-
-	const last_comment = comments
-		.filter((comment) => comment.body?.startsWith('# Svelte Check Results'))
-		.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-		.at(0);
-
-	if (last_comment) {
-		await ctx.octokit.rest.issues.updateComment({
-			comment_id: last_comment.id,
-			issue_number: ctx.pr_number,
-			owner: ctx.owner,
-			repo: ctx.repo,
-			body,
-		});
-	} else {
-		await ctx.octokit.rest.issues.createComment({
-			issue_number: ctx.pr_number,
-			owner: ctx.owner,
-			repo: ctx.repo,
-			body,
-		});
+async function send(diagnostics: DiagnosticStore) {
+	for (const [path, diags] of diagnostics.entries()) {
+		for (const diag of diags) {
+			console.log(
+				`::${diag.type == 'warning' ? 'warning' : 'error'} file=${path},line=${diag.start.line},endLine=${diag.end.line},title=svelte-check::${diag.message}`,
+			);
+		}
 	}
 }
 
 async function main() {
 	const ctx = get_ctx();
-
 	const changed_files = await get_pr_files(ctx);
 	const diagnostics = new DiagnosticStore(ctx, changed_files);
 
@@ -114,9 +90,7 @@ async function main() {
 		},
 	});
 
-	const markdown = await render(ctx, diagnostics);
-
-	await send(ctx, markdown);
+	await send(diagnostics);
 
 	const failed =
 		(ctx.config.fail_on_error && diagnostics.filtered_error_count) ||

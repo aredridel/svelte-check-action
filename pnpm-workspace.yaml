@@ -1,3 +1,6 @@
 packages:
-  - '.'
-  - './test'
+  - .
+  - ./test
+onlyBuiltDependencies:
+  - '@sveltejs/kit'
+  - esbuild
