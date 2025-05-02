@@ -1,5 +1,5 @@
-name: 'Svelte Check for PRs'
-description: 'Provides a Svelte Check readout on the files in a Pull Request'
+name: 'Svelte Check'
+description: 'Provides a Svelte Check readout'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
@@ -7,21 +7,14 @@ branding:
     color: 'orange'
 
 inputs:
-    token:
-        description: 'The github token to use'
-        required: true
     paths:
         description: 'The path(s) to run svelte-check from, one per line'
         required: false
         default: '.'
-    filterChanges:
-        description: 'When true only the files that change (in the pull request) will be checked'
-        required: false
-        default: 'true'
     failOnError:
         description: 'Should we cause CI to fail if there is a Svelte Check error?'
         required: false
-        default: 'false'
+        default: 'true'
     failOnWarning:
         description: 'Should we cause CI to fail if there is a Svelte Check warning?'
         required: false

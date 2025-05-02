@@ -29646,22 +29646,6 @@ async function try_run_svelte_kit_sync(cwd) {
 }
 
 // src/files.ts
-var import_node_path2 = require("path");
-function is_subdir(parent, child) {
-  return !(0, import_node_path2.relative)((0, import_node_path2.normalize)(parent), (0, import_node_path2.normalize)(child)).startsWith("..");
-}
-async function get_pr_files(ctx) {
-  if (!ctx.config.filter_changes) {
-    return null;
-  }
-  const pr_files = await ctx.octokit.paginate(ctx.octokit.rest.pulls.listFiles, {
-    per_page: 100,
-    pull_number: ctx.pr_number,
-    owner: ctx.owner,
-    repo: ctx.repo
-  });
-  return pr_files.map((file) => (0, import_node_path2.join)(ctx.repo_root, file.filename));
-}
 function fmt_path(path, ctx) {
   return path.replace(ctx.repo_root, "").replace(/^\/+/, "");
 }
@@ -29670,30 +29654,25 @@ function fmt_path(path, ctx) {
 var github = __toESM(require_github());
 var core = __toESM(require_core());
 var import_picomatch = __toESM(require_picomatch2());
-var import_node_path3 = require("path");
+var import_node_path2 = require("path");
 function get_ctx() {
   const token = core.getInput("token");
   const octokit = github.getOctokit(token);
   const repo_root = process.env.GITHUB_WORKSPACE;
   if (!repo_root) throw new Error("Missing GITHUB_WORKSPACE environment variable");
-  const pr_number = github.context.payload.pull_request?.number;
-  if (!pr_number) throw new Error("Can't find a pull request, are you running this on a pr?");
-  const diagnostic_paths = core.getMultilineInput("paths").map((path) => (0, import_node_path3.join)(repo_root, path));
+  const diagnostic_paths = core.getMultilineInput("paths").map((path) => (0, import_node_path2.join)(repo_root, path));
   if (diagnostic_paths.length == 0) diagnostic_paths.push(repo_root);
-  const filter_changes = core.getBooleanInput("filterChanges");
   const fail_filter = (0, import_picomatch.default)(core.getMultilineInput("failFilter"));
   const fail_on_warning = core.getBooleanInput("failOnWarning");
   const fail_on_error = core.getBooleanInput("failOnError");
   return {
     token,
     octokit,
-    pr_number,
     repo_root,
     repo: github.context.repo.repo,
     owner: github.context.repo.owner,
     config: {
       diagnostic_paths,
-      filter_changes,
       fail_on_warning,
       fail_on_error,
       fail_filter
@@ -29703,17 +29682,9 @@ function get_ctx() {
 
 // src/index.ts
 var core2 = __toESM(require_core());
-var github2 = __toESM(require_github());
-
-// src/render.ts
-var import_node_child_process2 = require("child_process");
-var import_promises2 = require("fs/promises");
-
-// src/index.ts
 var DiagnosticStore = class {
-  constructor(ctx, changed_files) {
+  constructor(ctx) {
     this.ctx = ctx;
-    this.changed_files = changed_files;
   }
   store = /* @__PURE__ */ new Map();
   warning_count = 0;
@@ -29727,9 +29698,6 @@ var DiagnosticStore = class {
     return this.filtered_warning_count + this.filtered_error_count;
   }
   add(diagnostic) {
-    if (this.changed_files && !this.changed_files.includes(diagnostic.path)) {
-      return;
-    }
     const current = this.store.get(diagnostic.path) ?? [];
     current.push(diagnostic);
     this.store.set(diagnostic.path, current);
@@ -29753,20 +29721,14 @@ async function send(diagnostics) {
 }
 async function main() {
   const ctx = get_ctx();
-  const changed_files = await get_pr_files(ctx);
-  const diagnostics = new DiagnosticStore(ctx, changed_files);
+  const diagnostics = new DiagnosticStore(ctx);
   for (const root_path of ctx.config.diagnostic_paths) {
-    const has_changed_files = changed_files ? changed_files.some((pr_file) => is_subdir(root_path, pr_file)) : true;
-    console.log(`${has_changed_files ? "checking" : "skipped"} "${root_path}"`);
-    if (has_changed_files) {
-      for (const diagnostic of await get_diagnostics(root_path)) {
-        diagnostics.add(diagnostic);
-      }
+    for (const diagnostic of await get_diagnostics(root_path)) {
+      diagnostics.add(diagnostic);
     }
   }
   console.log("debug", {
     diagnostics,
-    changed_files,
     ctx: {
       ...ctx,
       octokit: "(hidden)",
@@ -29782,7 +29744,6 @@ async function main() {
     var stringify = stringify2;
     core2.setFailed(
       `Failed with ${diagnostics.filtered_count} filtered issue${diagnostics.filtered_count === 1 ? "" : "s"} (${diagnostics.count} total). ${stringify2("failOnError", ctx.config.fail_on_error, diagnostics.filtered_error_count)} & ${stringify2("failOnWarning", ctx.config.fail_on_warning, diagnostics.filtered_warning_count)}. `
-      // `${ctx.config.fail_filter ? 'Failures filtered by path.' : ''}`,
     );
   }
 }
