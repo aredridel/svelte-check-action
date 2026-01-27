@@ -4,6 +4,8 @@ This action runs [svelte-check](http://npmjs.com/svelte-check) on the files that
 
 Works with svelte-check version 3 & 4. The action runs using Node 20.
 
+This is based on [ghostdevv's work](https://github.com/ghostdevv/svelte-check-action)
+
 ## Example
 
 ```yaml
